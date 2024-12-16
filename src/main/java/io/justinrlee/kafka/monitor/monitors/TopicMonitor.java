@@ -1,4 +1,4 @@
-package com.github.justinrlee.kafkamonitor.monitor;
+package io.justinrlee.kafka.monitor.monitors;
 
 // import io.prometheus.metrics.core.metrics.Counter;
 import io.prometheus.metrics.core.metrics.Gauge;
