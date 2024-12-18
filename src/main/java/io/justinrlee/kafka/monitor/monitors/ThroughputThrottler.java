@@ -1,6 +1,6 @@
 package io.justinrlee.kafka.monitor.monitors;
 
-// Copied wholesale from apache/kafka
+// Copied wholesale from https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/util/ThroughputThrottler.java
 
 public class ThroughputThrottler {
     private static final long NS_PER_MS = 1000000L;

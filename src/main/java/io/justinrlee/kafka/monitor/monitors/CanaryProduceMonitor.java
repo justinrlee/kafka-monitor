@@ -32,7 +32,7 @@ import java.util.ArrayList;
 
 import java.util.stream.Collectors;
 
-public class CanaryMonitor implements Runnable {
+public class CanaryProduceMonitor implements Runnable {
 
     public static final String DEFAULT_TRANSACTION_ID_PREFIX = "canary-producer-";
     Callback cb;
@@ -45,7 +45,7 @@ public class CanaryMonitor implements Runnable {
     // Map<String, Long> brokerRacks, brokerRacksCache, brokersUp;
 
 
-    public CanaryMonitor(Properties properties, String topicName, Gauge latencyGauge) {
+    public CanaryProduceMonitor(Properties properties, String topicName, Gauge latencyGauge) {
         // client = KafkaAdminClient.create(properties);
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
@@ -91,7 +91,7 @@ public class CanaryMonitor implements Runnable {
                 }
             }
         } catch (Exception e) {
-            System.out.println("Something bad happened - canarymonitor e");
+            System.out.println("Something bad happened - CanaryProduceMonitor e");
             System.out.println(e);
         }
     }
@@ -192,8 +192,9 @@ public class CanaryMonitor implements Runnable {
         public void printError() {
             System.out.println("unable to produce to topic");
 
-            latencyGauge.labelValues(topicName, "average").set(Integer.MAX_VALUE);
-            latencyGauge.labelValues(topicName, "max").set(Integer.MAX_VALUE);
+            // High enough to indicate that there's a problem; not so high that prometheus outputs it in scientific notation
+            latencyGauge.labelValues(topicName, "average").set(9999);
+            latencyGauge.labelValues(topicName, "max").set(9999);
 
         }
 

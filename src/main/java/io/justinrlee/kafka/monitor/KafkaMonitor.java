@@ -14,7 +14,7 @@ import io.prometheus.metrics.instrumentation.jvm.JvmMetrics;
 
 import io.justinrlee.kafka.monitor.monitors.BrokerMonitor;
 import io.justinrlee.kafka.monitor.monitors.TopicMonitor;
-import io.justinrlee.kafka.monitor.monitors.CanaryMonitor;
+import io.justinrlee.kafka.monitor.monitors.CanaryProduceMonitor;
 
 /**
  * Hello world!
@@ -37,29 +37,46 @@ public class KafkaMonitor
         properties.put("group.id", UUID.randomUUID().toString());
         properties.put("auto.offset.reset", "latest");
 
+        // Todo: support loading from config
+        int listenerPort = 9400;
+
         HTTPServer server = HTTPServer.builder()
-            .port(9400)
+            .port(listenerPort)
             .buildAndStart();
 
-        BrokerMonitor cm = new BrokerMonitor(properties);
-        Thread cm_t = new Thread(cm);
-        cm_t.start();
-        TopicMonitor tm = new TopicMonitor(properties);
-        Thread tm_t = new Thread(tm);
-        tm_t.start();
+        // Todo: use real logs
+        if (properties.getProperty("monitor.brokers.enabled", "false").equals("true")) {
+            System.out.println("Monitoring brokers");
+            BrokerMonitor cm = new BrokerMonitor(properties);
+            Thread cm_t = new Thread(cm);
+            cm_t.start();
+        }
 
+        if (properties.getProperty("monitor.replicas.enabled", "false").equals("true")) {
+            System.out.println("Monitoring replicas");
+            TopicMonitor tm = new TopicMonitor(properties);
+            Thread tm_t = new Thread(tm);
+            tm_t.start();
+        }
 
-        Gauge latencyGauge = Gauge.builder()
-            .name("latency")
-            .help("latency")
-            .labelNames("topic", "aggregation")
-            .register();
+        if (properties.getProperty("monitor.canary.produce.enabled", "false").equals("true") && !properties.getProperty("monitor.canary.produce.topics", "").equals("")) {
+            System.out.println("monitoring produce topics");
+            // if (!properties.getProperty("monitor.canary.produce.topics", "").equals("")) {
+            //     System.out.println("second test passed");
+            // }
+            Gauge latencyGauge = Gauge.builder()
+                .name("produce.latency")
+                .help("latency")
+                .labelNames("topic", "aggregation")
+                .register();
 
-        List<String> canaryTopics = Arrays.asList(properties.getProperty("canary.topics").split("\\s*,\\s*"));
-        for (String topicName: canaryTopics) {
-            CanaryMonitor cm1 = new CanaryMonitor(properties, topicName, latencyGauge);
-            Thread cm1_t = new Thread (cm1);
-            cm1_t.start();
+            List<String> canaryTopics = Arrays.asList(properties.getProperty("monitor.canary.produce.topics").split("\\s*,\\s*"));
+            for (String topicName: canaryTopics) {
+                System.out.println(topicName);
+                CanaryProduceMonitor cm1 = new CanaryProduceMonitor(properties, topicName, latencyGauge);
+                Thread cm1_t = new Thread (cm1);
+                cm1_t.start();
+            }
         }
         
         System.out.println("HTTPServer listening on port http://localhost:" + server.getPort() + "/metrics");
