@@ -27,3 +27,5 @@ replay_pid*
 
 client.properties
 *.xjava
+
+**/node_modules/

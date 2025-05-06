@@ -104,3 +104,16 @@ EOF
 
 java -cp /home/ubuntu/kafka-monitor/target/kafka-monitor-0.1-SNAPSHOT.jar io.justinrlee.kafka.monitor.KafkaMonitor
 ```
+
+```
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+
+source .bashrc
+nvm ls-remote
+
+nvm install v22.15.0
+
+cd /home/ubuntu/kafka-monitor/frontend/kafka-monitor-ui
+npm install
+npm run dev
+```
