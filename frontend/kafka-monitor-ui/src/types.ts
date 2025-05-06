@@ -20,6 +20,7 @@ export interface TopicHealth {
     onlineObservers: number;
     offlineObservers: number;
     inSyncReplicas: number;
+    partitionCount: number;
 }
 
 export interface BrokerInfo {

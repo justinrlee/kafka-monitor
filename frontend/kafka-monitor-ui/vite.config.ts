@@ -6,11 +6,13 @@ export default defineConfig({
     server: {
         port: 3000,
         host: '0.0.0.0',
-        allowedHosts: [
-            'ec2-3-0-94-206.ap-southeast-1.compute.amazonaws.com',
-            'localhost',
-            '127.0.0.1'
-        ],
+        // This is moderately insecure
+        allowedHosts: true,
+        // allowedHosts: [
+        //     '*',
+        //     'localhost',
+        //     '127.0.0.1'
+        // ],
         proxy: {
             '/topics': {
                 target: 'http://localhost:9401',

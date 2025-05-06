@@ -110,13 +110,15 @@ const TopicDetail: React.FC = () => {
                     return {
                         label: 'Leader',
                         color: 'success' as const,
-                        variant: 'filled' as const
+                        variant: 'filled' as const,
+                        sx: { bgcolor: 'success.light' }
                     };
                 case 'in-sync':
                     return {
-                        label: 'In-Sync',
+                        label: 'Follower',
                         color: 'info' as const,
-                        variant: 'filled' as const
+                        variant: 'filled' as const,
+                        sx: { bgcolor: 'success.main' }
                     };
                 case 'out-of-sync':
                     return {
@@ -127,7 +129,7 @@ const TopicDetail: React.FC = () => {
                 case 'observer':
                     return {
                         label: 'Observer',
-                        color: 'secondary' as const,
+                        color: 'info' as const,
                         variant: 'filled' as const
                     };
                 default:
@@ -150,7 +152,8 @@ const TopicDetail: React.FC = () => {
                         '& .MuiChip-label': {
                             overflow: 'hidden',
                             textOverflow: 'ellipsis'
-                        }
+                        },
+                        ...chipProps.sx
                     }}
                 />
             </Tooltip>

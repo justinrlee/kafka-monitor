@@ -10,18 +10,27 @@ const API_BASE_URL = '';
 const calculateTopicHealth = (partitions: PartitionInfo[]): TopicHealth => {
     const health: TopicHealth = {
         totalReplicas: 0,
+        onlineReplicas: 0,
+        offlineReplicas: 0,
+        totalObservers: 0,
+        onlineObservers: 0,
+        offlineObservers: 0,
         inSyncReplicas: 0,
-        outOfSyncReplicas: 0,
-        observers: 0,
-        offlineReplicas: 0
+        partitionCount: partitions.length
     };
 
     partitions.forEach(partition => {
-        health.totalReplicas += partition.replicas.length;
-        health.inSyncReplicas += partition.in_sync_replicas.length;
-        health.outOfSyncReplicas += partition.out_of_sync_replicas.length;
-        health.observers += partition.observers.length;
-        health.offlineReplicas += partition.offline_replicas.length;
+        // Calculate regular replica metrics
+        const regularReplicas = partition.replicas.filter(id => !partition.observers.includes(id));
+        health.totalReplicas += regularReplicas.length;
+        health.offlineReplicas += partition.offline_replicas.filter(id => !partition.observers.includes(id)).length;
+        health.onlineReplicas = health.totalReplicas - health.offlineReplicas;
+        health.inSyncReplicas += partition.in_sync_replicas.filter(id => !partition.observers.includes(id)).length;
+
+        // Calculate observer metrics
+        health.totalObservers += partition.observers.length;
+        health.offlineObservers += partition.offline_replicas.filter(id => partition.observers.includes(id)).length;
+        health.onlineObservers = health.totalObservers - health.offlineObservers;
     });
 
     return health;

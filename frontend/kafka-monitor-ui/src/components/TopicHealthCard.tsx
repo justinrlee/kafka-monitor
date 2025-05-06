@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, LinearProgress, Box, CardActionArea } from '@mui/material';
+import { Card, CardContent, Typography, LinearProgress, Box, CardActionArea, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { TopicHealth } from '../types';
 
@@ -19,9 +19,14 @@ const TopicHealthCard: React.FC<TopicHealthCardProps> = ({ topicName, health }) 
         <Card sx={{ minWidth: 275, m: 1 }}>
             <CardActionArea onClick={() => navigate(`/topic/${topicName}`)}>
                 <CardContent>
-                    <Typography variant="h5" component="div" gutterBottom>
-                        {topicName}
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 2 }}>
+                        <Typography variant="h5" component="div">
+                            {topicName}
+                        </Typography>
+                        <Typography variant="subtitle1" color="text.secondary">
+                            {health.partitionCount} partition{health.partitionCount !== 1 ? 's' : ''}
+                        </Typography>
+                    </Box>
 
                     <Box sx={{ mb: 2 }}>
                         <Typography variant="subtitle1" color="text.secondary">

@@ -6,6 +6,10 @@ import App from './App';
 const theme = createTheme({
     palette: {
         mode: 'light',
+        success: {
+            main: '#2e7d32',  // Default dark green for leaders
+            light: '#4caf50'  // Lighter green for in-sync replicas
+        }
     },
 });
 
