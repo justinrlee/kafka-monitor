@@ -84,7 +84,7 @@ sudo apt-get install -y \
     openjdk-17-jdk-headless \
     maven
 
-git clone https://github.com:justinrlee/kafka-monitor
+git clone https://github.com/justinrlee/kafka-monitor
 cd kafka-monitor
 mvn package
 
