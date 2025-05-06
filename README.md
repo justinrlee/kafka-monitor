@@ -96,7 +96,11 @@ sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule require
 ssl.endpoint.identification.algorithm=https
 ssl.truststore.location=truststore.p12
 ssl.truststore.password=confluent
+
+# Specific to monitor
+monitor.topics.enabled=true
+monitor.brokers.enabled=true
 EOF
 
-java -cp /home/ubuntu/kafka-monitor/target/kafka-monitor-1.0-SNAPSHOT.jar com.github.justinrlee.kafkamonitor.KafkaMonitor
+java -cp /home/ubuntu/kafka-monitor/target/kafka-monitor-0.1-SNAPSHOT.jar io.justinrlee.kafka.monitor.KafkaMonitor
 ```
