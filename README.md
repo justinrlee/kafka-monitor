@@ -1,7 +1,100 @@
-JDK 17
+# Kafka Topic Health Monitor
 
-Needs a client properties file called client.properties
-(todo: add option/flag for this)
+A monitoring application for Apache Kafka clusters that provides real-time visibility into topic health, partition distribution, and replica status.
+
+## Features
+
+- Real-time monitoring of Kafka topic health
+- Visual representation of replica status and distribution
+- Partition-level health monitoring
+- Broker rack awareness
+- Observer replica support
+- Offline replica detection
+- Interactive topic details view
+
+## Prerequisites
+
+- Java 11 or later (17 recommended)
+- Node.js 16 or later
+- npm 8 or later
+- Access to a Kafka cluster
+- Kafka cluster admin privileges
+
+
+## Project Structure
+
+```
+kafka-monitor/
+├── backend/          # Java backend service
+│   └── src/         # Java source files
+└── frontend/        # React frontend
+    └── kafka-monitor-ui/  # Frontend application
+```
+
+## Setup Instructions
+
+### Install prereqs
+
+```bash
+## Backend: JDK and Maven
+sudo apt-get update && \
+sudo apt-get install -y \
+    openjdk-17-jdk-headless \
+    maven
+
+## Frontend: nvm, npm, and node
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+
+source .bashrc
+nvm ls-remote
+
+nvm install v22.15.0
+```
+
+### Create client.properties
+(todo: add option/flag to configure filename)
+
+```conf
+## client.properties
+
+# Generic Java Kafka client configuration
+bootstrap.servers=kafka.internal:9092
+security.protocol=SASL_SSL
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="password";
+ssl.endpoint.identification.algorithm=https
+ssl.truststore.location=truststore.p12
+ssl.truststore.password=confluent
+
+# Specific to monitor
+monitor.topics.enabled=true
+monitor.brokers.enabled=true
+```
+
+Build and run backend
+
+```bash
+mvn package
+
+java -cp ./target/kafka-monitor-0.1-SNAPSHOT.jar io.justinrlee.kafka.monitor.KafkaMonitor
+```
+
+Will listen on ports 9400 (Prometheus endpoint) and 9401 (REST endpoint for frontend)
+
+Build and run frontend (separate terminal)
+
+```bash
+cd kafka-monitor/frontend/kafka-monitor-ui
+npm install
+
+# Replace with hostname for client to access backend
+export VITE_API_URL=http://ec2-3-0-94-206.ap-southeast-1.compute.amazonaws.com:9401
+
+npm run dev
+```
+
+Frontend will be accessible on port 3000
+
 
 Generates metrics from CC/CP cluster, including:
 * Broker availability (zero if not available)
@@ -74,49 +167,4 @@ replicas{partition="3",status="online",topic="obs",type="observer"} 1.0
 replicas{partition="3",status="online",topic="obs",type="regular"} 4.0
 replicas{partition="3",status="total",topic="obs",type="observer"} 2.0
 replicas{partition="3",status="total",topic="obs",type="regular"} 4.0
-```
-
-# Build/run
-
-```shell
-sudo apt-get update && \
-sudo apt-get install -y \
-    openjdk-17-jdk-headless \
-    maven
-
-git clone https://github.com/justinrlee/kafka-monitor
-cd kafka-monitor
-mvn package
-
-tee client.properties <<-'EOF'
-bootstrap.servers=kafka.internal:9092
-security.protocol=SASL_SSL
-sasl.mechanism=PLAIN
-sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="password";
-ssl.endpoint.identification.algorithm=https
-ssl.truststore.location=truststore.p12
-ssl.truststore.password=confluent
-
-# Specific to monitor
-monitor.topics.enabled=true
-monitor.brokers.enabled=true
-EOF
-
-java -cp /home/ubuntu/kafka-monitor/target/kafka-monitor-0.1-SNAPSHOT.jar io.justinrlee.kafka.monitor.KafkaMonitor
-```
-
-```
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-
-source .bashrc
-nvm ls-remote
-
-nvm install v22.15.0
-
-cd /home/ubuntu/kafka-monitor/frontend/kafka-monitor-ui
-npm install
-
-export VITE_API_URL=http://ec2-3-0-94-206.ap-southeast-1.compute.amazonaws.com:9401
-
-npm run dev
 ```
