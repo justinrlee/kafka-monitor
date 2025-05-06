@@ -157,22 +157,71 @@ const TopicDetail: React.FC = () => {
         );
     };
 
-    // Group brokers by rack
-    const brokerValues = Object.values(brokers);
-    const rackGroups = brokerValues.reduce<RackGroup[]>((groups, broker) => {
-        const existingGroup = groups.find(g => g.rack === broker.rack);
-        if (existingGroup) {
-            existingGroup.brokers.push(broker);
-        } else {
-            groups.push({ rack: broker.rack, brokers: [broker] });
-        }
-        return groups;
-    }, []).sort((a, b) => a.rack.localeCompare(b.rack));
+    // Get all broker IDs from both broker list and partition information
+    const getAllBrokerIds = () => {
+        const brokerIds = new Set<number>();
+        
+        // Add known brokers
+        Object.values(brokers).forEach(broker => {
+            brokerIds.add(broker.id);
+        });
 
-    // Sort brokers within each rack
-    rackGroups.forEach(group => {
-        group.brokers.sort((a, b) => a.id - b.id);
-    });
+        // Add any brokers mentioned in partition information
+        partitions.forEach(partition => {
+            partition.replicas.forEach(id => brokerIds.add(id));
+            partition.in_sync_replicas.forEach(id => brokerIds.add(id));
+            partition.out_of_sync_replicas?.forEach(id => brokerIds.add(id));
+            partition.observers.forEach(id => brokerIds.add(id));
+            partition.offline_replicas.forEach(id => brokerIds.add(id));
+        });
+
+        return Array.from(brokerIds).sort((a, b) => a - b);
+    };
+
+    // Create rack groups including offline brokers
+    const createRackGroups = () => {
+        const allBrokerIds = getAllBrokerIds();
+        const groups = new Map<string, BrokerInfo[]>();
+
+        // First, add all known brokers to their racks
+        Object.values(brokers).forEach(broker => {
+            if (!groups.has(broker.rack)) {
+                groups.set(broker.rack, []);
+            }
+            groups.get(broker.rack)!.push(broker);
+        });
+
+        // Then, add unknown/offline brokers to an "Unknown" rack
+        allBrokerIds.forEach(id => {
+            if (!Object.values(brokers).some(b => b.id === id)) {
+                const unknownBroker: BrokerInfo = {
+                    id,
+                    rack: 'Unknown',
+                    host: 'Offline',
+                    port: 0
+                };
+                if (!groups.has('Unknown')) {
+                    groups.set('Unknown', []);
+                }
+                groups.get('Unknown')!.push(unknownBroker);
+            }
+        });
+
+        // Convert to array and sort
+        return Array.from(groups.entries())
+            .map(([rack, brokers]) => ({
+                rack,
+                brokers: brokers.sort((a, b) => a.id - b.id)
+            }))
+            .sort((a, b) => {
+                // Put "Unknown" rack last
+                if (a.rack === 'Unknown') return 1;
+                if (b.rack === 'Unknown') return -1;
+                return a.rack.localeCompare(b.rack);
+            });
+    };
+
+    const rackGroups = createRackGroups();
 
     // Add function to calculate summary
     const calculateSummary = () => {
