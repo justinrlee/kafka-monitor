@@ -13,7 +13,8 @@ import {
     TableHead,
     TableRow,
     Chip,
-    Tooltip
+    Tooltip,
+    Alert
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import axios from 'axios';
@@ -173,6 +174,24 @@ const TopicDetail: React.FC = () => {
         group.brokers.sort((a, b) => a.id - b.id);
     });
 
+    // Add function to calculate summary
+    const calculateSummary = () => {
+        const summary = {
+            totalReplicas: 0,
+            offlineReplicas: 0,
+            totalPartitions: partitions.length
+        };
+
+        partitions.forEach(partition => {
+            summary.totalReplicas += partition.replicas.length;
+            summary.offlineReplicas += partition.offline_replicas.length;
+        });
+
+        return summary;
+    };
+
+    const summary = calculateSummary();
+
     return (
         <Container maxWidth="lg" sx={{ mt: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -193,6 +212,23 @@ const TopicDetail: React.FC = () => {
                     {error}
                 </Typography>
             )}
+
+            <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                    Summary
+                </Typography>
+                <Typography variant="body1">
+                    Total Partitions: {summary.totalPartitions}
+                </Typography>
+                <Typography variant="body1">
+                    Total Replicas: {summary.totalReplicas}
+                </Typography>
+                {summary.offlineReplicas > 0 && (
+                    <Alert severity="error" sx={{ mt: 1 }}>
+                        {summary.offlineReplicas} replica(s) are offline
+                    </Alert>
+                )}
+            </Box>
 
             <TableContainer component={Paper}>
                 <Table size="small">

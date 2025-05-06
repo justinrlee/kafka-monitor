@@ -115,5 +115,8 @@ nvm install v22.15.0
 
 cd /home/ubuntu/kafka-monitor/frontend/kafka-monitor-ui
 npm install
+
+export VITE_API_URL=http://ec2-3-0-94-206.ap-southeast-1.compute.amazonaws.com:9401
+
 npm run dev
 ```
