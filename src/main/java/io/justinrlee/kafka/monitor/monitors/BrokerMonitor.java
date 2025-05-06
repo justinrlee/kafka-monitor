@@ -26,12 +26,19 @@ import java.util.Collections;
 import java.util.ArrayList;
 
 import java.util.stream.Collectors;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 public class BrokerMonitor implements Runnable {
 
     AdminClient client;
     Gauge brokerCount, brokerAvailable;
     Map<String, Long> brokerRacks, brokerRacksCache, brokersUp;
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private volatile Map<Integer, Map<String, Object>> cachedBrokerInfo = new HashMap<>();
+    private final Object cacheLock = new Object();
+    // Keep track of the last known state of brokers
+    private Map<Integer, Map<String, Object>> lastKnownBrokerInfo = new HashMap<>();
 
     public BrokerMonitor(Properties properties) {
         client = KafkaAdminClient.create(properties);
@@ -64,6 +71,34 @@ public class BrokerMonitor implements Runnable {
                 brokerRacksCache = brokerRacks;
                 brokerRacks = brokers.stream().collect(Collectors.groupingBy(e -> e.rack(), Collectors.counting()));
 
+                // Update cached broker information
+                Map<Integer, Map<String, Object>> newBrokerInfo = new HashMap<>();
+
+                // First, copy over last known state but mark all as offline
+                for (Map.Entry<Integer, Map<String, Object>> entry : lastKnownBrokerInfo.entrySet()) {
+                    Map<String, Object> brokerData = new HashMap<>(entry.getValue());
+                    brokerData.put("online", false);
+                    newBrokerInfo.put(entry.getKey(), brokerData);
+                }
+
+                // Then update with current online brokers
+                for (Node broker : brokers) {
+                    Map<String, Object> brokerData = new HashMap<>();
+                    brokerData.put("id", broker.id());
+                    brokerData.put("rack", broker.rack());
+                    brokerData.put("host", broker.host());
+                    brokerData.put("port", broker.port());
+                    brokerData.put("online", broker.hasRack());
+                    newBrokerInfo.put(broker.id(), brokerData);
+                }
+
+                // Update last known state with current state
+                lastKnownBrokerInfo = new HashMap<>(newBrokerInfo);
+
+                synchronized (cacheLock) {
+                    cachedBrokerInfo = newBrokerInfo;
+                }
+
                 List<String> brokerIds = brokers.stream().map(Node::id).map(Object::toString).collect(Collectors.toList());
 
                 // todo: see if we wanna initialize an admin API instance against every broker.
@@ -81,8 +116,8 @@ public class BrokerMonitor implements Runnable {
                 }
 
                 for (var broker: brokerIds) {
-                        brokersUp.put(broker, 1L);
-                    }
+                    brokersUp.put(broker, 1L);
+                }
 
                 // Update labels
                 brokerCount.labelValues("all").set(brokers.size());
@@ -101,6 +136,12 @@ public class BrokerMonitor implements Runnable {
         } catch (ExecutionException e) {
             System.out.println("Something bad happened - brokermonitor ee");
             System.out.println(e);
+        }
+    }
+
+    public String getBrokersJson() {
+        synchronized (cacheLock) {
+            return gson.toJson(cachedBrokerInfo);
         }
     }
 }
