@@ -43,7 +43,7 @@ const TopicDetail: React.FC = () => {
         const fetchData = async () => {
             try {
                 const [topicResponse, brokerResponse] = await Promise.all([
-                    axios.get<PartitionInfo[]>(`${API_BASE_URL}/topics/${topicName}`),
+                    axios.get<PartitionInfo[]>(`${API_BASE_URL}/topics/${topicName}/partitions`),
                     axios.get<BrokerMap>(`${API_BASE_URL}/brokers`)
                 ]);
                 
