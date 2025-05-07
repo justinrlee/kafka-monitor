@@ -37,6 +37,7 @@ const TopicDetail: React.FC = () => {
     const navigate = useNavigate();
     const [partitions, setPartitions] = useState<PartitionInfo[]>([]);
     const [brokers, setBrokers] = useState<BrokerMap>({});
+    const [config, setConfig] = useState<Record<string, string>>({});
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -54,16 +55,18 @@ const TopicDetail: React.FC = () => {
                 });
 
                 // Race between the actual requests and the timeout
-                const [topicResponse, brokerResponse] = await Promise.race([
+                const [topicResponse, brokerResponse, configResponse] = await Promise.race([
                     Promise.all([
                         axios.get<PartitionInfo[]>(`${API_BASE_URL}/topics/${topicName}/partitions`),
-                        axios.get<BrokerMap>(`${API_BASE_URL}/brokers`)
+                        axios.get<BrokerMap>(`${API_BASE_URL}/brokers`),
+                        axios.get<Record<string, string>>(`${API_BASE_URL}/topics/${topicName}/config`)
                     ]),
                     timeoutPromise
-                ]) as [any, any];
+                ]) as [any, any, any];
                 
                 setPartitions(topicResponse.data.sort((a, b) => a.partition - b.partition));
                 setBrokers(brokerResponse.data);
+                setConfig(configResponse.data);
             } catch (err) {
                 console.error(err);
                 if (err.message === 'timeout') {
@@ -289,7 +292,7 @@ const TopicDetail: React.FC = () => {
                     Back
                 </Button>
                 <Typography variant="h4" component="h1">
-                    Topic: {topicName}
+                    Topic: {topicName} ({summary.totalPartitions} partitions)
                 </Typography>
             </Box>
 
@@ -312,6 +315,31 @@ const TopicDetail: React.FC = () => {
                         <Typography variant="body1">
                             Total Replicas: {summary.totalReplicas}
                         </Typography>
+                        <Typography variant="body1">
+                            Minimum In-Sync Replicas: {config['min.insync.replicas'] || 'Not set'}
+                        </Typography>
+                        {config['confluent.placement.constraints'] && (() => {
+                            try {
+                                const constraints = JSON.parse(config['confluent.placement.constraints']);
+                                return (
+                                    <>
+
+                                        {constraints.observerPromotionPolicy && (
+                                            <Typography variant="body1">
+                                                Observer Promotion Policy: {constraints.observerPromotionPolicy}
+                                            </Typography>
+                                        )}
+                                    </>
+                                );
+                            } catch (e) {
+                                // If JSON parsing fails, just show the raw string
+                                return (
+                                    <Typography variant="body1">
+                                        Placement Constraints: {config['confluent.placement.constraints']}
+                                    </Typography>
+                                );
+                            }
+                        })()}
                         {summary.offlineReplicas > 0 && (
                             <Alert severity="error" sx={{ mt: 1 }}>
                                 {summary.offlineReplicas} replica(s) are offline
@@ -323,7 +351,7 @@ const TopicDetail: React.FC = () => {
                         <Table size="small">
                             <TableHead>
                                 <TableRow>
-                                    <TableCell align="center" rowSpan={2}>Partition</TableCell>
+                                    <TableCell align="center" rowSpan={config['confluent.placement.constraints'] ? 3 : 2}>Partition</TableCell>
                                     {rackGroups.map((rackGroup) => (
                                         <TableCell 
                                             key={rackGroup.rack}
@@ -338,6 +366,53 @@ const TopicDetail: React.FC = () => {
                                         </TableCell>
                                     ))}
                                 </TableRow>
+                                {config['confluent.placement.constraints'] && (() => {
+                                    try {
+                                        const constraints = JSON.parse(config['confluent.placement.constraints']);
+                                        const rackCounts = new Map<string, {replicas: number, observers: number}>();
+                                        
+                                        // Process replicas
+                                        constraints.replicas?.forEach((replica: any) => {
+                                            const rack = replica.constraints.rack;
+                                            if (!rackCounts.has(rack)) {
+                                                rackCounts.set(rack, {replicas: 0, observers: 0});
+                                            }
+                                            rackCounts.get(rack)!.replicas = replica.count;
+                                        });
+
+                                        // Process observers
+                                        constraints.observers?.forEach((observer: any) => {
+                                            const rack = observer.constraints.rack;
+                                            if (!rackCounts.has(rack)) {
+                                                rackCounts.set(rack, {replicas: 0, observers: 0});
+                                            }
+                                            rackCounts.get(rack)!.observers = observer.count;
+                                        });
+
+                                        return (
+                                            <TableRow>
+                                                {rackGroups.map((rackGroup) => {
+                                                    const counts = rackCounts.get(rackGroup.rack) || {replicas: 0, observers: 0};
+                                                    return (
+                                                        <TableCell
+                                                            key={rackGroup.rack}
+                                                            align="center"
+                                                            colSpan={rackGroup.brokers.length}
+                                                            sx={{ 
+                                                                borderLeft: '1px solid rgba(224, 224, 224, 1)',
+                                                                fontSize: '0.875rem'
+                                                            }}
+                                                        >
+                                                            {counts.replicas} replica(s), {counts.observers} observer(s)
+                                                        </TableCell>
+                                                    );
+                                                })}
+                                            </TableRow>
+                                        );
+                                    } catch (e) {
+                                        return null;
+                                    }
+                                })()}
                                 <TableRow>
                                     {rackGroups.map((rackGroup) => (
                                         rackGroup.brokers.map((broker) => (
