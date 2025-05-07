@@ -5,6 +5,7 @@ export interface PartitionInfo {
     in_sync_replicas: number[];
     out_of_sync_replicas: number[];
     observers: number[];
+    promoted_observers: number[];
     offline_replicas: number[];
 }
 
@@ -20,6 +21,7 @@ export interface TopicHealth {
     onlineObservers: number;
     offlineObservers: number;
     inSyncReplicas: number;
+    promotedObservers: number;
     partitionCount: number;
 }
 

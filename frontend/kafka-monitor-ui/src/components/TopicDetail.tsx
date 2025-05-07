@@ -23,7 +23,7 @@ import { PartitionInfo, BrokerMap, BrokerInfo } from '../types';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:9401';
 
 interface BrokerStatus {
-    type: 'none' | 'leader' | 'in-sync' | 'out-of-sync' | 'observer' | 'offline';
+    type: 'none' | 'leader' | 'in-sync' | 'out-of-sync' | 'observer' | 'promoted-observer' | 'offline';
     isOnline: boolean;
 }
 
@@ -61,10 +61,16 @@ const TopicDetail: React.FC = () => {
         return () => clearInterval(interval);
     }, [topicName]);
 
-    const getBrokerStatus = (partition: PartitionInfo, brokerId: number): BrokerStatus => {
+    const getPartitionStatus = (partition: PartitionInfo, brokerId: number): BrokerStatus => {
         if (partition.leader === brokerId) {
             return { 
                 type: 'leader',
+                isOnline: !partition.offline_replicas.includes(brokerId)
+            };
+        }
+        if (partition.promoted_observers.includes(brokerId)) {
+            return { 
+                type: 'promoted-observer',
                 isOnline: !partition.offline_replicas.includes(brokerId)
             };
         }
@@ -333,7 +339,7 @@ const TopicDetail: React.FC = () => {
                                             align="center"
                                             sx={{ borderLeft: '1px solid rgba(224, 224, 224, 1)' }}
                                         >
-                                            {getStatusChip(getBrokerStatus(partition, broker.id))}
+                                            {getStatusChip(getPartitionStatus(partition, broker.id))}
                                         </TableCell>
                                     ))
                                 ))}

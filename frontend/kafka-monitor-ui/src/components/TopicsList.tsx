@@ -16,6 +16,7 @@ const calculateTopicHealth = (partitions: PartitionInfo[]): TopicHealth => {
         onlineObservers: 0,
         offlineObservers: 0,
         inSyncReplicas: 0,
+        promotedObservers: 0,
         partitionCount: partitions.length
     };
 
@@ -31,6 +32,7 @@ const calculateTopicHealth = (partitions: PartitionInfo[]): TopicHealth => {
         health.totalObservers += partition.observers.length;
         health.offlineObservers += partition.offline_replicas.filter(id => partition.observers.includes(id)).length;
         health.onlineObservers = health.totalObservers - health.offlineObservers;
+        health.promotedObservers += partition.promoted_observers.length;
     });
 
     return health;

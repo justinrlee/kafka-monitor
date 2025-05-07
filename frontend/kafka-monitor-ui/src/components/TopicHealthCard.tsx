@@ -54,6 +54,14 @@ const TopicHealthCard: React.FC<TopicHealthCardProps> = ({ topicName, health }) 
                         </Box>
                     )}
 
+                    {health.totalObservers > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                Promoted observers: {health.promotedObservers}
+                            </Typography>
+                        </Box>
+                    )}
+
                     <Typography variant="body2" color="text.secondary">
                         In-sync replicas: {health.inSyncReplicas}
                     </Typography>
