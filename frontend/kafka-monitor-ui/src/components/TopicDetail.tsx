@@ -69,7 +69,7 @@ const TopicDetail: React.FC = () => {
                 if (err.message === 'timeout') {
                     setError('Request timed out. Please check if the API server is running and VITE_API_URL is set correctly.');
                 } else if (axios.isAxiosError(err) && !err.response) {
-                    setError('Unable to connect to API. Please check if VITE_API_URL is set correctly or if the API server is running.');
+                    setError('Unable to connect to API. Please check ensure the environment variable VITE_API_URL is set correctly or if the API server is running.');
                 } else {
                     setError('Failed to fetch data');
                 }
