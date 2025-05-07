@@ -132,6 +132,12 @@ const TopicDetail: React.FC = () => {
                         color: 'warning' as const,
                         variant: 'filled' as const
                     };
+                case 'promoted-observer':
+                    return {
+                        label: 'Promoted Observer',
+                        color: 'info' as const,
+                        variant: 'filled' as const
+                    };
                 case 'observer':
                     return {
                         label: 'Observer',
