@@ -145,7 +145,7 @@ public class KafkaMonitor
                         // Extract topic name from path (e.g., /topics/my-topic/config)
                         String topicName = path.substring("/topics/".length(), path.length() - "/partitions".length());
                         try {
-                            jsonResponse = topicMonitor.getTopicJson(topicName);
+                            jsonResponse = topicMonitor.getTopicPartitionsJson(topicName);
                         } catch (Exception e) {
                             String errorResponse = "{\"error\": \"" + e.getMessage() + "\"}";
                             exchange.getResponseHeaders().set("Content-Type", "application/json");

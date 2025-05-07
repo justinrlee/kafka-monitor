@@ -44,7 +44,7 @@ public class TopicMonitor implements Runnable {
     AdminClient client;
     Gauge replicaGauge;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    private volatile Map<String, List<Map<String, Object>>> cachedTopicReplicaInfo = new HashMap<>();
+    private volatile Map<String, List<Map<String, Object>>> cachedTopicPartitionsInfo = new HashMap<>();
     private volatile Map<String, Map<String, String>> cachedTopicConfigInfo = new HashMap<>();
     private final Object cacheLock = new Object();
     private Map<String, Set<Integer>> lastKnownTopicReplicas = new HashMap<>();
@@ -223,7 +223,7 @@ public class TopicMonitor implements Runnable {
 
                 // Update the cache atomically
                 synchronized (cacheLock) {
-                    cachedTopicReplicaInfo = topicReplicaInfo;
+                    cachedTopicPartitionsInfo = topicReplicaInfo;
                 }
 
                 Thread.sleep(5000);
@@ -239,13 +239,24 @@ public class TopicMonitor implements Runnable {
 
     public String getTopicsJson() throws Exception {
         synchronized (cacheLock) {
-            return gson.toJson(cachedTopicReplicaInfo);
+            return gson.toJson(cachedTopicPartitionsInfo);
         }
     }
 
+    // At some point, will change this.
     public String getTopicJson(String topicName) throws Exception {
         synchronized (cacheLock) {
-            List<Map<String, Object>> topicInfo = cachedTopicReplicaInfo.get(topicName);
+            List<Map<String, Object>> topicInfo = cachedTopicPartitionsInfo.get(topicName);
+            if (topicInfo == null) {
+                throw new Exception("Topic not found: " + topicName);
+            }
+            return gson.toJson(topicInfo);
+        }
+    }
+
+    public String getTopicPartitionsJson(String topicName) throws Exception {
+        synchronized (cacheLock) {
+            List<Map<String, Object>> topicInfo = cachedTopicPartitionsInfo.get(topicName);
             if (topicInfo == null) {
                 throw new Exception("Topic not found: " + topicName);
             }
