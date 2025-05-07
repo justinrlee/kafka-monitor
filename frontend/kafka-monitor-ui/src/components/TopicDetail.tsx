@@ -278,9 +278,6 @@ const TopicDetail: React.FC = () => {
             )}
 
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                    Summary
-                </Typography>
                 <Typography variant="body1">
                     Total Partitions: {summary.totalPartitions}
                 </Typography>
