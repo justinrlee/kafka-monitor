@@ -29,3 +29,6 @@ client.properties
 *.xjava
 
 **/node_modules/
+
+# VS Code configuration
+.vscode
