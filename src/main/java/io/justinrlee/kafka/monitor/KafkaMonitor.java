@@ -64,7 +64,7 @@ public class KafkaMonitor
         TopicMonitor tm = null;
         BrokerMonitor bm = null;
 
-        if (properties.getProperty("monitor.topics.enabled", "false").equals("true")) {
+        if (properties.getProperty("monitor.topics.enabled", "true").equals("true")) {
             System.out.println("Monitoring topics");
             tm = new TopicMonitor(properties);
             Thread topicMonitor_t = new Thread(tm);
@@ -73,7 +73,7 @@ public class KafkaMonitor
 
         final TopicMonitor topicMonitor = tm;
 
-        if (properties.getProperty("monitor.brokers.enabled", "false").equals("true")) {
+        if (properties.getProperty("monitor.brokers.enabled", "true").equals("true")) {
             System.out.println("Monitoring brokers");
             bm = new BrokerMonitor(properties);
             Thread brokerMonitor_t = new Thread(bm);
