@@ -98,6 +98,7 @@ public class TopicMonitor implements Runnable {
                         List<Integer> inSyncList = new ArrayList<>();
                         List<Integer> outOfSyncList = new ArrayList<>();
                         List<Integer> observerList = new ArrayList<>();
+                        List<Integer> promotedObserverList = new ArrayList<>();
                         List<Integer> offlineList = new ArrayList<>();
 
                         // Track the leader first (highest priority)
@@ -152,6 +153,11 @@ public class TopicMonitor implements Runnable {
                                 offlineList.add(observer.id());
                             } else {
                                 observerList.add(observer.id());
+                                // If the observer is in ISR, add it to both lists
+                                if (isr.contains(observer)) {
+                                    inSyncList.add(observer.id());
+                                    promotedObserverList.add(observer.id());
+                                }
                             }
                         }
 
@@ -160,6 +166,7 @@ public class TopicMonitor implements Runnable {
                         partitionInfo.put("in_sync_replicas", inSyncList);
                         partitionInfo.put("out_of_sync_replicas", outOfSyncList);
                         partitionInfo.put("observers", observerList);
+                        partitionInfo.put("promoted_observers", promotedObserverList);
                         partitionInfo.put("offline_replicas", offlineList);
 
                         // Include all replicas (in-sync, out-of-sync, observers, and offline)
