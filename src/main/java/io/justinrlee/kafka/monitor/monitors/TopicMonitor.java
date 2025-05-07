@@ -13,7 +13,11 @@ import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Node;
 
@@ -40,10 +44,12 @@ public class TopicMonitor implements Runnable {
     AdminClient client;
     Gauge replicaGauge;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    private volatile Map<String, List<Map<String, Object>>> cachedTopicInfo = new HashMap<>();
+    private volatile Map<String, List<Map<String, Object>>> cachedTopicReplicaInfo = new HashMap<>();
+    private volatile Map<String, Map<String, String>> cachedTopicConfigInfo = new HashMap<>();
     private final Object cacheLock = new Object();
     private Map<String, Set<Integer>> lastKnownTopicReplicas = new HashMap<>();
     private Map<String, Set<Integer>> lastKnownTopicObservers = new HashMap<>();
+    private int iterationCounter = 0;
 
     List<TopicPartitionInfo> partitions;
 
@@ -69,10 +75,37 @@ public class TopicMonitor implements Runnable {
                 DescribeTopicsResult dtr = client.describeTopics(topics);
                 Map<String, TopicDescription> tds = dtr.allTopicNames().get();
 
+                // Every 12 iterations (approximately 60 seconds), get topic configs
+                if (iterationCounter++ % 12 == 0) {
+                    Set<ConfigResource> resources = topics.stream()
+                        .map(topic -> new ConfigResource(ConfigResource.Type.TOPIC, topic))
+                        .collect(Collectors.toSet());
+                    
+                    DescribeConfigsResult dcr = client.describeConfigs(resources);
+                    Map<ConfigResource, Config> configs = dcr.all().get();
+
+                    // Convert configs to a more manageable format and update cache
+                    Map<String, Map<String, String>> newConfigInfo = new HashMap<>();
+                    for (Map.Entry<ConfigResource, Config> entry : configs.entrySet()) {
+                        String topicName = entry.getKey().name();
+                        Map<String, String> topicConfig = entry.getValue().entries().stream()
+                            .collect(Collectors.toMap(
+                                ConfigEntry::name,
+                                ConfigEntry::value
+                            ));
+                        newConfigInfo.put(topicName, topicConfig);
+                    }
+
+                    // Update the cache atomically
+                    synchronized (cacheLock) {
+                        cachedTopicConfigInfo = newConfigInfo;
+                    }
+                }
+
                 replicaGauge.clear();
                 
                 // Update the cached topic information
-                Map<String, List<Map<String, Object>>> newTopicInfo = new HashMap<>();
+                Map<String, List<Map<String, Object>>> topicReplicaInfo = new HashMap<>();
 
                 for (var topicDescription: tds.entrySet()) {
                     String topicName = topicDescription.getValue().name();
@@ -185,12 +218,12 @@ public class TopicMonitor implements Runnable {
                     lastKnownTopicReplicas.put(topicName, currentReplicas);
                     lastKnownTopicObservers.put(topicName, currentObservers);
 
-                    newTopicInfo.put(topicName, partitionList);
+                    topicReplicaInfo.put(topicName, partitionList);
                 }
 
                 // Update the cache atomically
                 synchronized (cacheLock) {
-                    cachedTopicInfo = newTopicInfo;
+                    cachedTopicReplicaInfo = topicReplicaInfo;
                 }
 
                 Thread.sleep(5000);
@@ -206,17 +239,27 @@ public class TopicMonitor implements Runnable {
 
     public String getTopicsJson() throws Exception {
         synchronized (cacheLock) {
-            return gson.toJson(cachedTopicInfo);
+            return gson.toJson(cachedTopicReplicaInfo);
         }
     }
 
     public String getTopicJson(String topicName) throws Exception {
         synchronized (cacheLock) {
-            List<Map<String, Object>> topicInfo = cachedTopicInfo.get(topicName);
+            List<Map<String, Object>> topicInfo = cachedTopicReplicaInfo.get(topicName);
             if (topicInfo == null) {
                 throw new Exception("Topic not found: " + topicName);
             }
             return gson.toJson(topicInfo);
+        }
+    }
+
+    public String getTopicConfigJson(String topicName) throws Exception {
+        synchronized (cacheLock) {
+            Map<String, String> topicConfig = cachedTopicConfigInfo.get(topicName);
+            if (topicConfig == null) {
+                throw new Exception("Topic configuration not found: " + topicName);
+            }
+            return gson.toJson(topicConfig);
         }
     }
 }

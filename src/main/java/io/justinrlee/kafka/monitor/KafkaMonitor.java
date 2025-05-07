@@ -127,6 +127,34 @@ public class KafkaMonitor
                     if (path.equals("/topics")) {
                         // Return all topics
                         jsonResponse = topicMonitor.getTopicsJson();
+                    } else if (path.matches("/topics/[a-zA-Z0-9._-]+/config")) {
+                        // Extract topic name from path (e.g., /topics/my-topic/config)
+                        String topicName = path.substring("/topics/".length(), path.length() - "/config".length());
+                        try {
+                            jsonResponse = topicMonitor.getTopicConfigJson(topicName);
+                        } catch (Exception e) {
+                            String errorResponse = "{\"error\": \"" + e.getMessage() + "\"}";
+                            exchange.getResponseHeaders().set("Content-Type", "application/json");
+                            exchange.sendResponseHeaders(404, errorResponse.length());
+                            try (OutputStream os = exchange.getResponseBody()) {
+                                os.write(errorResponse.getBytes(StandardCharsets.UTF_8));
+                            }
+                            return;
+                        }
+                    } else if (path.matches("/topics/[a-zA-Z0-9._-]+/partitions")) {
+                        // Extract topic name from path (e.g., /topics/my-topic/config)
+                        String topicName = path.substring("/topics/".length(), path.length() - "/partitions".length());
+                        try {
+                            jsonResponse = topicMonitor.getTopicJson(topicName);
+                        } catch (Exception e) {
+                            String errorResponse = "{\"error\": \"" + e.getMessage() + "\"}";
+                            exchange.getResponseHeaders().set("Content-Type", "application/json");
+                            exchange.sendResponseHeaders(404, errorResponse.length());
+                            try (OutputStream os = exchange.getResponseBody()) {
+                                os.write(errorResponse.getBytes(StandardCharsets.UTF_8));
+                            }
+                            return;
+                        }
                     } else {
                         // Extract topic name from path (e.g., /topics/my-topic)
                         String topicName = path.substring("/topics/".length());
