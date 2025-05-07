@@ -134,8 +134,8 @@ const TopicDetail: React.FC = () => {
                     };
                 case 'promoted-observer':
                     return {
-                        label: 'Promoted Observer',
-                        color: 'info' as const,
+                        label: 'Promoted',
+                        color: 'warning' as const,
                         variant: 'filled' as const
                     };
                 case 'observer':
@@ -298,7 +298,7 @@ const TopicDetail: React.FC = () => {
                 <Table size="small">
                     <TableHead>
                         <TableRow>
-                            <TableCell rowSpan={2}>Partition</TableCell>
+                            <TableCell align="center" rowSpan={2}>Partition</TableCell>
                             {rackGroups.map((rackGroup) => (
                                 <TableCell 
                                     key={rackGroup.rack}
@@ -309,7 +309,7 @@ const TopicDetail: React.FC = () => {
                                         backgroundColor: 'rgba(0, 0, 0, 0.02)'
                                     }}
                                 >
-                                    Rack: {rackGroup.rack}
+                                    Rack [{rackGroup.rack}]
                                 </TableCell>
                             ))}
                         </TableRow>
@@ -326,7 +326,7 @@ const TopicDetail: React.FC = () => {
                                     >
                                         <Tooltip title={`${broker.host}:${broker.port}`}>
                                             <Typography variant="body2">
-                                                Broker {broker.id}
+                                                Broker [{broker.id}]
                                             </Typography>
                                         </Tooltip>
                                     </TableCell>
@@ -337,7 +337,7 @@ const TopicDetail: React.FC = () => {
                     <TableBody>
                         {partitions.map((partition) => (
                             <TableRow key={partition.partition}>
-                                <TableCell>{partition.partition}</TableCell>
+                                <TableCell align="center">{partition.partition}</TableCell>
                                 {rackGroups.map((rackGroup) => (
                                     rackGroup.brokers.map((broker) => (
                                         <TableCell
