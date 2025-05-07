@@ -38,21 +38,43 @@ const TopicDetail: React.FC = () => {
     const [partitions, setPartitions] = useState<PartitionInfo[]>([]);
     const [brokers, setBrokers] = useState<BrokerMap>({});
     const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [topicResponse, brokerResponse] = await Promise.all([
-                    axios.get<PartitionInfo[]>(`${API_BASE_URL}/topics/${topicName}/partitions`),
-                    axios.get<BrokerMap>(`${API_BASE_URL}/brokers`)
-                ]);
+                setIsLoading(true);
+                setError(null);
+
+                // Create a timeout promise
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => {
+                        reject(new Error('timeout'));
+                    }, 5000); // 5 second timeout
+                });
+
+                // Race between the actual requests and the timeout
+                const [topicResponse, brokerResponse] = await Promise.race([
+                    Promise.all([
+                        axios.get<PartitionInfo[]>(`${API_BASE_URL}/topics/${topicName}/partitions`),
+                        axios.get<BrokerMap>(`${API_BASE_URL}/brokers`)
+                    ]),
+                    timeoutPromise
+                ]) as [any, any];
                 
                 setPartitions(topicResponse.data.sort((a, b) => a.partition - b.partition));
                 setBrokers(brokerResponse.data);
-                setError(null);
             } catch (err) {
-                setError('Failed to fetch data');
                 console.error(err);
+                if (err.message === 'timeout') {
+                    setError('Request timed out. Please check if the API server is running and VITE_API_URL is set correctly.');
+                } else if (axios.isAxiosError(err) && !err.response) {
+                    setError('Unable to connect to API. Please check if VITE_API_URL is set correctly or if the API server is running.');
+                } else {
+                    setError('Failed to fetch data');
+                }
+            } finally {
+                setIsLoading(false);
             }
         };
 
@@ -272,85 +294,93 @@ const TopicDetail: React.FC = () => {
             </Box>
 
             {error && (
-                <Typography color="error" variant="h6" gutterBottom>
+                <Alert severity="error" sx={{ mb: 3 }}>
                     {error}
-                </Typography>
+                </Alert>
             )}
 
-            <Box sx={{ mb: 3 }}>
-                <Typography variant="body1">
-                    Total Partitions: {summary.totalPartitions}
-                </Typography>
-                <Typography variant="body1">
-                    Total Replicas: {summary.totalReplicas}
-                </Typography>
-                {summary.offlineReplicas > 0 && (
-                    <Alert severity="error" sx={{ mt: 1 }}>
-                        {summary.offlineReplicas} replica(s) are offline
-                    </Alert>
-                )}
-            </Box>
+            {isLoading ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography>Loading topic information...</Typography>
+                </Box>
+            ) : !error && (
+                <>
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="body1">
+                            Total Partitions: {summary.totalPartitions}
+                        </Typography>
+                        <Typography variant="body1">
+                            Total Replicas: {summary.totalReplicas}
+                        </Typography>
+                        {summary.offlineReplicas > 0 && (
+                            <Alert severity="error" sx={{ mt: 1 }}>
+                                {summary.offlineReplicas} replica(s) are offline
+                            </Alert>
+                        )}
+                    </Box>
 
-            <TableContainer component={Paper}>
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell align="center" rowSpan={2}>Partition</TableCell>
-                            {rackGroups.map((rackGroup) => (
-                                <TableCell 
-                                    key={rackGroup.rack}
-                                    align="center"
-                                    colSpan={rackGroup.brokers.length}
-                                    sx={{ 
-                                        borderLeft: '1px solid rgba(224, 224, 224, 1)',
-                                        backgroundColor: 'rgba(0, 0, 0, 0.02)'
-                                    }}
-                                >
-                                    Rack [{rackGroup.rack}]
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                        <TableRow>
-                            {rackGroups.map((rackGroup) => (
-                                rackGroup.brokers.map((broker) => (
-                                    <TableCell
-                                        key={broker.id}
-                                        align="center"
-                                        sx={{ 
-                                            borderLeft: '1px solid rgba(224, 224, 224, 1)',
-                                            minWidth: '100px'
-                                        }}
-                                    >
-                                        <Tooltip title={`${broker.host}:${broker.port}`}>
-                                            <Typography variant="body2">
-                                                Broker [{broker.id}]
-                                            </Typography>
-                                        </Tooltip>
-                                    </TableCell>
-                                ))
-                            ))}
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {partitions.map((partition) => (
-                            <TableRow key={partition.partition}>
-                                <TableCell align="center">{partition.partition}</TableCell>
-                                {rackGroups.map((rackGroup) => (
-                                    rackGroup.brokers.map((broker) => (
-                                        <TableCell
-                                            key={broker.id}
+                    <TableContainer component={Paper}>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell align="center" rowSpan={2}>Partition</TableCell>
+                                    {rackGroups.map((rackGroup) => (
+                                        <TableCell 
+                                            key={rackGroup.rack}
                                             align="center"
-                                            sx={{ borderLeft: '1px solid rgba(224, 224, 224, 1)' }}
+                                            colSpan={rackGroup.brokers.length}
+                                            sx={{ 
+                                                borderLeft: '1px solid rgba(224, 224, 224, 1)',
+                                                backgroundColor: 'rgba(0, 0, 0, 0.02)'
+                                            }}
                                         >
-                                            {getStatusChip(getPartitionStatus(partition, broker.id))}
+                                            Rack [{rackGroup.rack}]
                                         </TableCell>
-                                    ))
+                                    ))}
+                                </TableRow>
+                                <TableRow>
+                                    {rackGroups.map((rackGroup) => (
+                                        rackGroup.brokers.map((broker) => (
+                                            <TableCell
+                                                key={broker.id}
+                                                align="center"
+                                                sx={{ 
+                                                    borderLeft: '1px solid rgba(224, 224, 224, 1)',
+                                                    minWidth: '100px'
+                                                }}
+                                            >
+                                                <Tooltip title={`${broker.host}:${broker.port}`}>
+                                                    <Typography variant="body2">
+                                                        Broker [{broker.id}]
+                                                    </Typography>
+                                                </Tooltip>
+                                            </TableCell>
+                                        ))
+                                    ))}
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {partitions.map((partition) => (
+                                    <TableRow key={partition.partition}>
+                                        <TableCell align="center">{partition.partition}</TableCell>
+                                        {rackGroups.map((rackGroup) => (
+                                            rackGroup.brokers.map((broker) => (
+                                                <TableCell
+                                                    key={broker.id}
+                                                    align="center"
+                                                    sx={{ borderLeft: '1px solid rgba(224, 224, 224, 1)' }}
+                                                >
+                                                    {getStatusChip(getPartitionStatus(partition, broker.id))}
+                                                </TableCell>
+                                            ))
+                                        ))}
+                                    </TableRow>
                                 ))}
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </>
+            )}
         </Container>
     );
 };
