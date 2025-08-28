@@ -31,6 +31,9 @@ import java.util.Collections;
 import java.util.ArrayList;
 
 import java.util.stream.Collectors;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import java.nio.ByteBuffer;
 
 public class CanaryProduceMonitor implements Runnable {
 
@@ -73,22 +76,35 @@ public class CanaryProduceMonitor implements Runnable {
 
             ThroughputThrottler throttler = new ThroughputThrottler(1, startMs);
 
-            for (long i = 0; i < 1000; i++) {
-                try {
-                    payload = "hello world".getBytes();
-                } catch (Exception e) {
-                    System.out.println("hello");
-                }
+            long i = 0;
+            while (true) {
 
-                record = new ProducerRecord<>(topicName, payload);
+                // Create headers with timestamp information
+                Headers headers = new RecordHeaders();
+                long messageGeneratedMs = System.currentTimeMillis();
+                
+                // Add timestamp header as bytes (8-byte long)
+                ByteBuffer timestampBuffer = ByteBuffer.allocate(8);
+                timestampBuffer.putLong(messageGeneratedMs);
+                headers.add("canary-timestamp-ms", timestampBuffer.array());
+                
+                // Add sequence number for message correlation
+                ByteBuffer sequenceBuffer = ByteBuffer.allocate(8);
+                sequenceBuffer.putLong(i);
+                headers.add("canary-sequence", sequenceBuffer.array());
+
+                // topicname, partition, timestamp, timestamp, key, value, headers
+                record = new ProducerRecord<>(topicName, null, null, null, null, headers);
 
                 long sendStartMs = System.currentTimeMillis();
-                cb = new PerfCallback(sendStartMs, payload.length, stats);
+                cb = new PerfCallback(sendStartMs, 0, stats);
                 producer.send(record, cb);
 
                 if(throttler.shouldThrottle(i, sendStartMs)) {
                     throttler.throttle();
                 }
+
+                i++;
             }
         } catch (Exception e) {
             System.out.println("Something bad happened - CanaryProduceMonitor e");

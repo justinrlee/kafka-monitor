@@ -35,6 +35,7 @@ import java.net.InetSocketAddress;
 import io.justinrlee.kafka.monitor.monitors.BrokerMonitor;
 import io.justinrlee.kafka.monitor.monitors.TopicMonitor;
 import io.justinrlee.kafka.monitor.monitors.CanaryProduceMonitor;
+import io.justinrlee.kafka.monitor.monitors.CanaryConsumeMonitor;
 
 /**
  * Hello world!
@@ -261,6 +262,45 @@ public class KafkaMonitor
                 CanaryProduceMonitor cm1 = new CanaryProduceMonitor(properties, topicName, latencyGauge);
                 Thread cm1_t = new Thread (cm1);
                 cm1_t.start();
+            }
+        }
+
+        // Canary consumer monitoring
+        if (properties.getProperty("monitor.canary.consume.enabled", "false").equals("true") && !properties.getProperty("monitor.canary.consume.topics", "").equals("")) {
+            System.out.println("monitoring consume topics");
+            
+            // Create metrics for end-to-end latency and message tracking
+            Gauge endToEndLatencyGauge = Gauge.builder()
+                .name("consume.endtoend.latency")
+                .help("End-to-end latency from message creation to consumption")
+                .labelNames("topic", "aggregation")
+                .register();
+                
+            Counter messagesConsumedCounter = Counter.builder()
+                .name("canary.messages.consumed")
+                .help("Number of canary messages consumed")
+                .labelNames("topic", "partition")
+                .register();
+                
+            Counter messagesLostCounter = Counter.builder()
+                .name("canary.messages.lost")
+                .help("Number of canary messages lost (sequence gaps)")
+                .labelNames("topic", "partition")
+                .register();
+                
+            Gauge timeSinceLastMessageGauge = Gauge.builder()
+                .name("canary.time.since.last.message")
+                .help("Time in seconds since the last canary message was consumed")
+                .labelNames("topic")
+                .register();
+
+            List<String> canaryTopics = Arrays.asList(properties.getProperty("monitor.canary.consume.topics").split("\\s*,\\s*"));
+            for (String topicName: canaryTopics) {
+                System.out.println("Starting canary consumer for topic: " + topicName);
+                CanaryConsumeMonitor consumer = new CanaryConsumeMonitor(properties, topicName, 
+                    endToEndLatencyGauge, messagesConsumedCounter, messagesLostCounter, timeSinceLastMessageGauge);
+                Thread consumerThread = new Thread(consumer);
+                consumerThread.start();
             }
         }
         
