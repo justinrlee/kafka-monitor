@@ -56,7 +56,11 @@ public class KafkaMonitor
                 System.exit(1);
         }
         properties.put("group.id", UUID.randomUUID().toString());
-        properties.put("auto.offset.reset", "latest");
+        properties.put("auto.offset.reset", "latest"); // Default for general consumers, canary consumer overrides to "earliest"
+
+        // Generate unique monitor instance ID
+        String monitorInstanceId = UUID.randomUUID().toString();
+        System.out.println("Monitor instance ID: " + monitorInstanceId);
 
         // Todo: support loading from config
         int prometheusPort = 9400;
@@ -244,30 +248,10 @@ public class KafkaMonitor
         apiServer.setExecutor(null); // Use the default executor
         apiServer.start();
 
-        // Todo: use real logs
-        if (properties.getProperty("monitor.canary.produce.enabled", "false").equals("true") && !properties.getProperty("monitor.canary.produce.topics", "").equals("")) {
-            System.out.println("monitoring produce topics");
-            // if (!properties.getProperty("monitor.canary.produce.topics", "").equals("")) {
-            //     System.out.println("second test passed");
-            // }
-            Gauge latencyGauge = Gauge.builder()
-                .name("produce.latency")
-                .help("latency")
-                .labelNames("topic", "aggregation")
-                .register();
-
-            List<String> canaryTopics = Arrays.asList(properties.getProperty("monitor.canary.produce.topics").split("\\s*,\\s*"));
-            for (String topicName: canaryTopics) {
-                System.out.println(topicName);
-                CanaryProduceMonitor cm1 = new CanaryProduceMonitor(properties, topicName, latencyGauge);
-                Thread cm1_t = new Thread (cm1);
-                cm1_t.start();
-            }
-        }
-
-        // Canary consumer monitoring
+        // Start canary consumer monitoring FIRST to avoid missing initial messages
+        boolean consumersStarted = false;
         if (properties.getProperty("monitor.canary.consume.enabled", "false").equals("true") && !properties.getProperty("monitor.canary.consume.topics", "").equals("")) {
-            System.out.println("monitoring consume topics");
+            System.out.println("Starting canary consumers first...");
             
             // Create metrics for end-to-end latency and message tracking
             Gauge endToEndLatencyGauge = Gauge.builder()
@@ -298,9 +282,41 @@ public class KafkaMonitor
             for (String topicName: canaryTopics) {
                 System.out.println("Starting canary consumer for topic: " + topicName);
                 CanaryConsumeMonitor consumer = new CanaryConsumeMonitor(properties, topicName, 
-                    endToEndLatencyGauge, messagesConsumedCounter, messagesLostCounter, timeSinceLastMessageGauge);
+                    endToEndLatencyGauge, messagesConsumedCounter, messagesLostCounter, timeSinceLastMessageGauge, monitorInstanceId);
                 Thread consumerThread = new Thread(consumer);
                 consumerThread.start();
+            }
+            
+            // Give consumers time to start up and get partition assignments
+            System.out.println("Waiting for consumers to initialize...");
+            try {
+                Thread.sleep(3000); // 3 second delay
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            consumersStarted = true;
+        }
+
+        // Start canary producer monitoring AFTER consumers are ready
+        if (properties.getProperty("monitor.canary.produce.enabled", "false").equals("true") && !properties.getProperty("monitor.canary.produce.topics", "").equals("")) {
+            if (consumersStarted) {
+                System.out.println("Now starting canary producers...");
+            } else {
+                System.out.println("Starting canary producers (no consumers configured)...");
+            }
+            
+            Gauge latencyGauge = Gauge.builder()
+                .name("produce.latency")
+                .help("latency")
+                .labelNames("topic", "aggregation")
+                .register();
+
+            List<String> canaryTopics = Arrays.asList(properties.getProperty("monitor.canary.produce.topics").split("\\s*,\\s*"));
+            for (String topicName: canaryTopics) {
+                System.out.println("Starting canary producer for topic: " + topicName);
+                CanaryProduceMonitor cm1 = new CanaryProduceMonitor(properties, topicName, latencyGauge, monitorInstanceId);
+                Thread cm1_t = new Thread (cm1);
+                cm1_t.start();
             }
         }
         

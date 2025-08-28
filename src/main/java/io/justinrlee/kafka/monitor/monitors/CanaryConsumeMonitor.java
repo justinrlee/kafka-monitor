@@ -26,6 +26,7 @@ public class CanaryConsumeMonitor implements Runnable {
     private final Counter messagesConsumedCounter;
     private final Counter messagesLostCounter;
     private final Gauge timeSinceLastMessageGauge;
+    private final String monitorInstanceId;
     
     // Sequence tracking for message loss detection
     private final Map<String, SequenceTracker> sequenceTrackers = new HashMap<>();
@@ -35,12 +36,13 @@ public class CanaryConsumeMonitor implements Runnable {
 
     public CanaryConsumeMonitor(Properties properties, String topicName, 
                                Gauge endToEndLatencyGauge, Counter messagesConsumedCounter, 
-                               Counter messagesLostCounter, Gauge timeSinceLastMessageGauge) {
+                               Counter messagesLostCounter, Gauge timeSinceLastMessageGauge, String monitorInstanceId) {
         this.topicName = topicName;
         this.endToEndLatencyGauge = endToEndLatencyGauge;
         this.messagesConsumedCounter = messagesConsumedCounter;
         this.messagesLostCounter = messagesLostCounter;
         this.timeSinceLastMessageGauge = timeSinceLastMessageGauge;
+        this.monitorInstanceId = monitorInstanceId;
         
         // Configure consumer properties
         Properties consumerProps = new Properties();
@@ -49,7 +51,7 @@ public class CanaryConsumeMonitor implements Runnable {
                          "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, 
                          "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"); // Use earliest to avoid missing messages during startup, monitor ID filtering handles old messages
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
         
         this.consumer = new KafkaConsumer<>(consumerProps);
@@ -62,7 +64,7 @@ public class CanaryConsumeMonitor implements Runnable {
     @Override
     public void run() {
         try {
-            System.out.println("Starting canary consumer for topic: " + topicName);
+            System.out.println("Starting canary consumer for topic: " + topicName + " with monitor ID: " + monitorInstanceId);
             
             while (true) {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(1000));
@@ -86,12 +88,25 @@ public class CanaryConsumeMonitor implements Runnable {
         try {
             long consumeTime = System.currentTimeMillis();
             
-            // Extract timestamp from headers
+            // Extract headers
             Header timestampHeader = record.headers().lastHeader("canary-timestamp-ms");
             Header sequenceHeader = record.headers().lastHeader("canary-sequence");
+            Header monitorIdHeader = record.headers().lastHeader("canary-monitor-id");
             
             if (timestampHeader == null || sequenceHeader == null) {
                 System.err.println("Received message without canary headers on topic " + topicName);
+                return;
+            }
+            
+            // Filter messages by monitor instance ID
+            if (monitorIdHeader == null) {
+                // Old message without monitor ID - ignore
+                return;
+            }
+            
+            String messageMonitorId = new String(monitorIdHeader.value());
+            if (!monitorInstanceId.equals(messageMonitorId)) {
+                // Message from different monitor instance - ignore
                 return;
             }
             

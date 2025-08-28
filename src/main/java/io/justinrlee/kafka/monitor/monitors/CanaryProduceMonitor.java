@@ -43,12 +43,13 @@ public class CanaryProduceMonitor implements Runnable {
 
     String topicName;
     KafkaProducer<byte[], byte[]> producer;
+    String monitorInstanceId;
 
     Gauge latencyGauge;
     // Map<String, Long> brokerRacks, brokerRacksCache, brokersUp;
 
 
-    public CanaryProduceMonitor(Properties properties, String topicName, Gauge latencyGauge) {
+    public CanaryProduceMonitor(Properties properties, String topicName, Gauge latencyGauge, String monitorInstanceId) {
         // client = KafkaAdminClient.create(properties);
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
@@ -56,6 +57,7 @@ public class CanaryProduceMonitor implements Runnable {
 
         this.topicName = topicName;
         this.latencyGauge = latencyGauge;
+        this.monitorInstanceId = monitorInstanceId;
 
     }
 
@@ -92,6 +94,9 @@ public class CanaryProduceMonitor implements Runnable {
                 ByteBuffer sequenceBuffer = ByteBuffer.allocate(8);
                 sequenceBuffer.putLong(i);
                 headers.add("canary-sequence", sequenceBuffer.array());
+                
+                // Add monitor instance ID for message filtering
+                headers.add("canary-monitor-id", monitorInstanceId.getBytes());
 
                 // topicname, partition, timestamp, timestamp, key, value, headers
                 record = new ProducerRecord<>(topicName, null, null, null, null, headers);
