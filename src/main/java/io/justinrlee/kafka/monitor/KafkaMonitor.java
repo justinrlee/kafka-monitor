@@ -22,6 +22,9 @@ import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Node;
 import com.google.gson.Gson;
@@ -30,6 +33,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Collections;
+import java.util.List;
 import java.net.InetSocketAddress;
 
 import io.justinrlee.kafka.monitor.monitors.BrokerMonitor;
@@ -38,11 +43,69 @@ import io.justinrlee.kafka.monitor.monitors.CanaryProduceMonitor;
 import io.justinrlee.kafka.monitor.monitors.CanaryConsumeMonitor;
 
 /**
- * Hello world!
+ * Kafka Monitor with Canary functionality
  *
  */
 public class KafkaMonitor
 {
+    // Helper class to hold partition information
+    public static class PartitionInfo {
+        public final int partition;
+        public final long currentOffset;
+        
+        public PartitionInfo(int partition, long currentOffset) {
+            this.partition = partition;
+            this.currentOffset = currentOffset;
+        }
+        
+        @Override
+        public String toString() {
+            return String.format("Partition{%d, offset=%d}", partition, currentOffset);
+        }
+    }
+    
+    // Discover partitions and current offsets for a topic
+    private static Map<Integer, PartitionInfo> discoverPartitionInfo(Properties properties, String topicName) {
+        Map<Integer, PartitionInfo> partitionInfo = new HashMap<>();
+        
+        try (AdminClient adminClient = AdminClient.create(properties)) {
+            // Get topic description to find partitions
+            DescribeTopicsResult topicsResult = adminClient.describeTopics(Collections.singletonList(topicName));
+            TopicDescription topicDescription = topicsResult.values().get(topicName).get();
+            
+            // Create TopicPartition objects for offset lookup
+            List<TopicPartition> topicPartitions = new ArrayList<>();
+            for (TopicPartitionInfo partitionInfo2 : topicDescription.partitions()) {
+                topicPartitions.add(new TopicPartition(topicName, partitionInfo2.partition()));
+            }
+            
+            // Get current (latest) offsets for each partition
+            Map<TopicPartition, OffsetSpec> offsetSpecs = new HashMap<>();
+            for (TopicPartition tp : topicPartitions) {
+                offsetSpecs.put(tp, OffsetSpec.latest());
+            }
+            
+            ListOffsetsResult offsetsResult = adminClient.listOffsets(offsetSpecs);
+            Map<TopicPartition, org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo> offsets = offsetsResult.all().get();
+            
+            // Build partition info map
+            for (TopicPartition tp : topicPartitions) {
+                long currentOffset = offsets.get(tp).offset();
+                partitionInfo.put(tp.partition(), new PartitionInfo(tp.partition(), currentOffset));
+            }
+            
+            System.out.printf("Discovered %d partitions for topic %s:%n", partitionInfo.size(), topicName);
+            for (PartitionInfo info : partitionInfo.values()) {
+                System.out.printf("  %s%n", info);
+            }
+            
+        } catch (Exception e) {
+            System.err.printf("Failed to discover partition info for topic %s: %s%n", topicName, e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return partitionInfo;
+    }
     public static void main( String[] args ) throws InterruptedException, IOException {
 
         Properties properties = new Properties();
@@ -257,7 +320,7 @@ public class KafkaMonitor
             Gauge endToEndLatencyGauge = Gauge.builder()
                 .name("consume.endtoend.latency")
                 .help("End-to-end latency from message creation to consumption")
-                .labelNames("topic", "aggregation")
+                .labelNames("topic", "partition", "aggregation")
                 .register();
                 
             Counter messagesConsumedCounter = Counter.builder()
@@ -280,11 +343,19 @@ public class KafkaMonitor
 
             List<String> canaryTopics = Arrays.asList(properties.getProperty("monitor.canary.consume.topics").split("\\s*,\\s*"));
             for (String topicName: canaryTopics) {
-                System.out.println("Starting canary consumer for topic: " + topicName);
-                CanaryConsumeMonitor consumer = new CanaryConsumeMonitor(properties, topicName, 
-                    endToEndLatencyGauge, messagesConsumedCounter, messagesLostCounter, timeSinceLastMessageGauge, monitorInstanceId);
-                Thread consumerThread = new Thread(consumer);
-                consumerThread.start();
+                System.out.println("Discovering partitions for consumer topic: " + topicName);
+                Map<Integer, PartitionInfo> partitionInfoMap = discoverPartitionInfo(properties, topicName);
+                
+                if (!partitionInfoMap.isEmpty()) {
+                    System.out.println("Starting canary consumer for topic: " + topicName);
+                    CanaryConsumeMonitor consumer = new CanaryConsumeMonitor(properties, topicName, 
+                        endToEndLatencyGauge, messagesConsumedCounter, messagesLostCounter, timeSinceLastMessageGauge, 
+                        monitorInstanceId, partitionInfoMap);
+                    Thread consumerThread = new Thread(consumer);
+                    consumerThread.start();
+                } else {
+                    System.err.println("No partitions found for topic: " + topicName + ", skipping consumer");
+                }
             }
             
             // Give consumers time to start up and get partition assignments
@@ -308,15 +379,28 @@ public class KafkaMonitor
             Gauge latencyGauge = Gauge.builder()
                 .name("produce.latency")
                 .help("latency")
-                .labelNames("topic", "aggregation")
+                .labelNames("topic", "partition", "aggregation")
                 .register();
+
+            // Get configurable message rate (default 1.0 messages per partition per second)
+            double messagesPerPartitionPerSecond = Double.parseDouble(
+                properties.getProperty("monitor.canary.messages.per.partition.per.second", "1.0"));
+            System.out.printf("Canary producer configured for %.1f messages per partition per second%n", messagesPerPartitionPerSecond);
 
             List<String> canaryTopics = Arrays.asList(properties.getProperty("monitor.canary.produce.topics").split("\\s*,\\s*"));
             for (String topicName: canaryTopics) {
-                System.out.println("Starting canary producer for topic: " + topicName);
-                CanaryProduceMonitor cm1 = new CanaryProduceMonitor(properties, topicName, latencyGauge, monitorInstanceId);
-                Thread cm1_t = new Thread (cm1);
-                cm1_t.start();
+                System.out.println("Discovering partitions for producer topic: " + topicName);
+                Map<Integer, PartitionInfo> partitionInfoMap = discoverPartitionInfo(properties, topicName);
+                
+                if (!partitionInfoMap.isEmpty()) {
+                    System.out.println("Starting canary producer for topic: " + topicName);
+                    CanaryProduceMonitor cm1 = new CanaryProduceMonitor(properties, topicName, latencyGauge, 
+                        monitorInstanceId, partitionInfoMap, messagesPerPartitionPerSecond);
+                    Thread cm1_t = new Thread (cm1);
+                    cm1_t.start();
+                } else {
+                    System.err.println("No partitions found for topic: " + topicName + ", skipping producer");
+                }
             }
         }
         
